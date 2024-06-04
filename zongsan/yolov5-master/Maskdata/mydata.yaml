@@ -1,0 +1,9 @@
+train: ../Maskdata/train/images
+val: ../Maskdata/val/images
+test: ../Maskdata/test/images
+nc: 3
+names:
+  0: prohibitory
+  1: warning
+  2: mandatory
+
