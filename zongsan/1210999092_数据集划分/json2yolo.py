@@ -56,3 +56,4 @@ if __name__ == "__main__":
 
     for json_name in json_names:
         decode_json(json_folder_path, json_name)
+    #进行格式的转换
