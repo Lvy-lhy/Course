@@ -220,7 +220,14 @@ def run(
                         label = None if hide_labels else (names[c] if hide_conf else f"{names[c]} {conf:.2f}")
                         annotator.box_label(xyxy, label, color=colors(c, True))
                     if save_crop:
-                        save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
+                        #未修改代码
+                        #save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
+                        if save_crop:
+                            # Save cropped image
+                            save_crop_dir = save_dir / "crops" / names[c]
+                            save_crop_dir.mkdir(parents=True, exist_ok=True)
+                            save_one_box(xyxy, imc, file=save_crop_dir / f"{p.stem}_{i}.jpg", BGR=True)
+                            LOGGER.info(f"Saved crop to {save_crop_dir / f'{p.stem}_{i}.jpg'}")
 
             # Stream results
             im0 = annotator.result()
@@ -272,7 +279,7 @@ def parse_opt():
     parser = argparse.ArgumentParser()
 
     # 权重路径或模型URL，指定使用不同的模型
-    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "runs/train/exp41/weights/best.pt", help="model path or triton URL")
+    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "runs/train/exp43/weights/best.pt", help="model path or triton URL")
     # 测试文件的路径，可以是文件、目录、URL、通配符、屏幕或0（表示摄像头）
     parser.add_argument("--source", type=str, default=ROOT / "Maskdata/val/images", help="file/dir/URL/glob/screen/0(webcam)")
     # 数据集的路径，可选参数
