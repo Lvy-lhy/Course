@@ -272,9 +272,9 @@ def parse_opt():
     parser = argparse.ArgumentParser()
 
     # 权重路径或模型URL，指定使用不同的模型
-    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "runs/train/exp5_未加入未佩戴口罩训练结果/weights/best.pt", help="model path or triton URL")
+    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "runs/train/exp41/weights/best.pt", help="model path or triton URL")
     # 测试文件的路径，可以是文件、目录、URL、通配符、屏幕或0（表示摄像头）
-    parser.add_argument("--source", type=str, default=ROOT / "data/images", help="file/dir/URL/glob/screen/0(webcam)")
+    parser.add_argument("--source", type=str, default=ROOT / "Maskdata/val/images", help="file/dir/URL/glob/screen/0(webcam)")
     # 数据集的路径，可选参数
     parser.add_argument("--data", type=str, default=ROOT / "Maskdata/mydata.yaml", help="(optional) dataset.yaml path")
     # 推理时图像的尺寸，可以指定高度和宽度
