@@ -1,0 +1,15 @@
+train: ../Maskdata/train/images_for_test
+val: ../Maskdata/val/images_for_test
+test: ../Maskdata/test/images_for_test
+nc: 3
+names:
+  0: prohibitory # 限速 ——改指示
+  1: warning     # 警告 ——改禁令
+  2: mandatory   # 指示 ——改警告
+#
+#  0: mandatory # 限速 ——改指示
+#  1: prohibitory     # 警告 ——改禁止
+#  2: warning   # 指示 ——改警告
+
+
+
