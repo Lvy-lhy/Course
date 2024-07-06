@@ -2,6 +2,8 @@ import subprocess
 import shutil
 import os
 import glob
+import warnings
+
 import torch
 import torchvision.transforms as transforms
 from torchvision import models
@@ -15,12 +17,14 @@ transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # 正则化
 ])
-
+# 在导入 torchvision 之前设置警告过滤器
+warnings.filterwarnings("ignore", category=UserWarning, module="torchvision.models._utils")
+import torchvision.models as models
 # 使用预训练的ResNet18模型
 class ResNetClassifier(nn.Module):
     def __init__(self, num_classes):
         super(ResNetClassifier, self).__init__()
-        self.resnet = models.resnet18(pretrained=True)
+        self.resnet = models.resnet18(pretrained=True)  # 尝试使用预训练=True加载模型
         self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)
 
     def forward(self, x):
@@ -105,7 +109,7 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         self.title = '图像分类'
         self.left = 100
         self.top = 100
-        self.width = 800
+        self.width = 1000
         self.height = 700
         self.initUI()
 
@@ -123,7 +127,7 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         # 图片显示标签
         self.image_label = QtWidgets.QLabel(self)
         self.image_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.image_label.setFixedSize(600, 400)
+        self.image_label.setFixedSize(800, 450)
         left_layout.addWidget(self.image_label)
 
         # 文本框，显示预测结果
@@ -171,6 +175,12 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         self.btn_predict.clicked.connect(self.predict_images)
         right_layout.addWidget(self.btn_predict)
 
+        # 新增一个中间过程按钮
+        self.btn_show_latest_images = QtWidgets.QPushButton('显示最新图片', self)
+        self.btn_show_latest_images.setFixedSize(150, 30)
+        self.btn_show_latest_images.clicked.connect(self.show_latest_images)
+        right_layout.addWidget(self.btn_show_latest_images)
+
         # 添加一个占位符，确保按钮靠上对齐
         right_layout.addStretch(1)
 
@@ -187,6 +197,39 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         self.predictions = []
         self.current_image_index = 0
 
+    def show_latest_images(self):
+        # 查找最新的 runs/detect 目录
+        detect_dirs_pattern = './runs/detect/*/'
+        detect_dirs = glob.glob(detect_dirs_pattern)
+
+        if not detect_dirs:
+            print("未找到检测目录.")
+            return
+
+        latest_detect_dir = max(detect_dirs, key=os.path.getmtime)
+
+        # 获取最新的图片文件列表
+        image_files = []
+        for ext in ['*.png', '*.jpg', '*.jpeg']:
+            image_files.extend(glob.glob(os.path.join(latest_detect_dir, ext)))
+
+        if not image_files:
+            print(f"未找到图片文件: {latest_detect_dir}")
+            return
+
+        # 显示第一张图片和预测结果
+        self.image_list = image_files
+        self.current_image_index = 0
+        self.show_image_and_predictions(self.current_image_index)  # 更新界面显示
+
+        # 更新文本框显示图片信息
+        self.text_edit.clear()
+        for image_path in self.image_list:
+            image_name = os.path.basename(image_path)
+            predicted_label, label_explanation = self.predict_image(image_path)
+            self.text_edit.append(f"图片: {image_name}")
+            self.text_edit.append(f"类别: {label_explanation}")
+            self.text_edit.append("")  # 空行分隔不同图片的信息
     def select_folder(self):
         self.source_folder = QtWidgets.QFileDialog.getExistingDirectory(self, "选择文件夹")
         if self.source_folder:
