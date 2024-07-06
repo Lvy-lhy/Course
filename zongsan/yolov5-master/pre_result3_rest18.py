@@ -63,7 +63,7 @@ class ResNetClassifier(nn.Module):
 model = ResNetClassifier(num_classes=58)
 
 # 加载模型参数
-model.load_state_dict(torch.load("rest8_model/rest18_checkpoint .pth"))
+model.load_state_dict(torch.load("rest18_model/rest18_checkpoint .pth"))
 model.eval()  # 设置模型为评估模式
 
 # 定义类别与中文解释的映射字典

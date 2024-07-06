@@ -97,7 +97,6 @@ label_map = {
     58: "停车让行"
 }
 
-
 # PyQt5 界面
 class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
     def __init__(self):
@@ -170,6 +169,12 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         self.btn_predict.setFixedSize(150, 30)
         self.btn_predict.clicked.connect(self.predict_images)
         right_layout.addWidget(self.btn_predict)
+
+        # 查看中间过程按钮
+        self.btn_view_intermediate = QtWidgets.QPushButton('查看中间过程', self)
+        self.btn_view_intermediate.setFixedSize(150, 30)
+        self.btn_view_intermediate.clicked.connect(self.view_intermediate)
+        right_layout.addWidget(self.btn_view_intermediate)
 
         # 添加一个占位符，确保按钮靠上对齐
         right_layout.addStretch(1)
@@ -315,6 +320,92 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         if self.current_image_index < len(self.image_list) - 1:
             self.current_image_index += 1
             self.show_image_and_predictions(self.current_image_index)
+
+    def view_intermediate(self):
+        # 确定runs/detect下最新的目录
+        detect_dirs_pattern = './runs/detect/exp*/'
+        detect_dirs = glob.glob(detect_dirs_pattern)
+
+        if not detect_dirs:
+            print("未找到检测目录.")
+            return
+
+        latest_detect_dir = max(detect_dirs, key=os.path.getmtime)
+
+        # 获取最新的目录中的所有图片
+        image_files = []
+        for ext in ('*.png', '*.jpg', '*.jpeg'):
+            image_files.extend(glob.glob(os.path.join(latest_detect_dir, ext)))
+
+        if not image_files:
+            print("检测目录中未找到图片.")
+            return
+
+        # 显示中间过程图片
+        self.intermediate_viewer = IntermediateViewer(image_files)
+        self.intermediate_viewer.show()
+
+
+class IntermediateViewer(QtWidgets.QWidget):
+    def __init__(self, image_files):
+        super().__init__()
+        self.title = '中间过程图片'
+        self.left = 150
+        self.top = 150
+        self.width = 800
+        self.height = 700
+        self.image_files = image_files
+        self.current_image_index = 0
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle(self.title)
+        self.setGeometry(self.left, self.top, self.width, self.height)
+
+        # 创建布局
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # 图片显示标签
+        self.image_label = QtWidgets.QLabel(self)
+        self.image_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.image_label.setFixedSize(600, 400)
+        layout.addWidget(self.image_label)
+
+        # 导航按钮布局
+        nav_layout = QtWidgets.QHBoxLayout()
+        self.btn_prev = QtWidgets.QPushButton('上一张', self)
+        self.btn_prev.setFixedSize(100, 30)
+        self.btn_prev.clicked.connect(self.show_prev_image)
+        nav_layout.addWidget(self.btn_prev)
+
+        self.btn_next = QtWidgets.QPushButton('下一张', self)
+        self.btn_next.setFixedSize(100, 30)
+        self.btn_next.clicked.connect(self.show_next_image)
+        nav_layout.addWidget(self.btn_next)
+
+        layout.addLayout(nav_layout)
+
+        # 设置主布局
+        self.setLayout(layout)
+
+        # 显示第一张图片
+        self.show_image(self.current_image_index)
+
+    def show_image(self, index):
+        if 0 <= index < len(self.image_files):
+            image_path = self.image_files[index]
+            pixmap = QtGui.QPixmap(image_path)
+            self.image_label.setPixmap(pixmap.scaledToWidth(600))  # 调整图片宽度显示
+
+    def show_prev_image(self):
+        if self.current_image_index > 0:
+            self.current_image_index -= 1
+            self.show_image(self.current_image_index)
+
+    def show_next_image(self):
+        if self.current_image_index < len(self.image_files) - 1:
+            self.current_image_index += 1
+            self.show_image(self.current_image_index)
 
 
 if __name__ == '__main__':
