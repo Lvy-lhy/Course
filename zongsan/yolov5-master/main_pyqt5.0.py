@@ -2,6 +2,7 @@ import subprocess
 import shutil
 import os
 import glob
+import json
 import warnings
 
 import torch
@@ -10,22 +11,22 @@ from torchvision import models
 from PIL import Image
 import torch.nn as nn
 from PyQt5 import QtWidgets, QtGui, QtCore
+import warnings
 
+warnings.filterwarnings("ignore")
 # 定义图像预处理函数
 transform = transforms.Compose([
     transforms.Resize((224, 224)),  # 调整图像大小为模型期望的尺寸
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # 正则化
 ])
-# 在导入 torchvision 之前设置警告过滤器
-warnings.filterwarnings("ignore", category=UserWarning, module="torchvision.models._utils")
-import torchvision.models as models
+
 # 使用预训练的ResNet18模型
 class ResNetClassifier(nn.Module):
     def __init__(self, num_classes):
         super(ResNetClassifier, self).__init__()
-        self.resnet = models.resnet18(pretrained=True)  # 尝试使用预训练=True加载模型
-        self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)
+        self.resnet = models.resnet18(pretrained=True)
+        self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)#调整模型最后一层全连接
 
     def forward(self, x):
         return self.resnet(x)
@@ -37,7 +38,6 @@ model = ResNetClassifier(num_classes=58)
 model.load_state_dict(torch.load("rest18_model/rest18_checkpoint .pth", map_location=torch.device('cpu')))
 model.eval()  # 设置模型为评估模式
 
-# 定义类别与中文解释的映射字典
 # 定义类别与中文解释的映射字典
 label_map = {
     0: "限速5公里/小时",
@@ -98,19 +98,17 @@ label_map = {
     55: "禁止驶入",
     56: "减速让行",
     57: "停车检查",
-    58: "停车让行"
 }
 
-
 # PyQt5 界面
-class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
+class App(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.title = '图像分类'
         self.left = 100
         self.top = 100
-        self.width = 1000
-        self.height = 700
+        self.width = 1400
+        self.height = 800
         self.initUI()
 
     def initUI(self):
@@ -118,23 +116,33 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         self.setGeometry(self.left, self.top, self.width, self.height)
 
         # 创建布局
-        main_layout = QtWidgets.QHBoxLayout(self)
+        main_layout = QtWidgets.QVBoxLayout(self)
 
-        # 创建左侧布局，用于显示图片和预测结果
-        left_layout = QtWidgets.QVBoxLayout()
-        left_layout.setAlignment(QtCore.Qt.AlignTop)
+        # 创建上侧布局，用于显示图片
+        image_layout = QtWidgets.QHBoxLayout()
 
-        # 图片显示标签
-        self.image_label = QtWidgets.QLabel(self)
-        self.image_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.image_label.setFixedSize(800, 450)
-        left_layout.addWidget(self.image_label)
+        # 左侧显示裁剪后的图片
+        self.cropped_image_label = QtWidgets.QLabel(self)
+        self.cropped_image_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.cropped_image_label.setFixedSize(600, 400)
+        image_layout.addWidget(self.cropped_image_label)
+
+        # 右侧显示原始图片
+        self.original_image_label = QtWidgets.QLabel(self)
+        self.original_image_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.original_image_label.setFixedSize(600, 400)
+        image_layout.addWidget(self.original_image_label)
+
+        main_layout.addLayout(image_layout)
+
+        # 创建下侧布局，用于显示预测结果和导航按钮
+        bottom_layout = QtWidgets.QVBoxLayout()
 
         # 文本框，显示预测结果
         self.text_edit = QtWidgets.QTextEdit(self)
         self.text_edit.setReadOnly(True)
-        self.text_edit.setFixedSize(600, 200)
-        left_layout.addWidget(self.text_edit)
+        self.text_edit.setFixedSize(1200, 200)
+        bottom_layout.addWidget(self.text_edit)
 
         # 导航按钮布局
         nav_layout = QtWidgets.QHBoxLayout()
@@ -148,10 +156,10 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         self.btn_next.clicked.connect(self.show_next_image)
         nav_layout.addWidget(self.btn_next)
 
-        left_layout.addLayout(nav_layout)
+        bottom_layout.addLayout(nav_layout)
 
-        # 将左侧布局添加到主布局中
-        main_layout.addLayout(left_layout)
+        # 将底部布局添加到主布局中
+        main_layout.addLayout(bottom_layout)
 
         # 创建右侧布局，用于放置按钮
         right_layout = QtWidgets.QVBoxLayout()
@@ -175,12 +183,6 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         self.btn_predict.clicked.connect(self.predict_images)
         right_layout.addWidget(self.btn_predict)
 
-        # 新增一个中间过程按钮
-        self.btn_show_latest_images = QtWidgets.QPushButton('显示最新图片', self)
-        self.btn_show_latest_images.setFixedSize(150, 30)
-        self.btn_show_latest_images.clicked.connect(self.show_latest_images)
-        right_layout.addWidget(self.btn_show_latest_images)
-
         # 添加一个占位符，确保按钮靠上对齐
         right_layout.addStretch(1)
 
@@ -192,44 +194,15 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
 
         # 初始化变量
         self.source_folder = None
-        self.target_dir = None
+        self.target_dir = './target_directory/'
+        self.original_image_map = {}
         self.image_list = []
         self.predictions = []
         self.current_image_index = 0
 
-    def show_latest_images(self):
-        # 查找最新的 runs/detect 目录
-        detect_dirs_pattern = './runs/detect/*/'
-        detect_dirs = glob.glob(detect_dirs_pattern)
+        # 加载裁剪图片映射（如果存在）
+        self.load_image_map()
 
-        if not detect_dirs:
-            print("未找到检测目录.")
-            return
-
-        latest_detect_dir = max(detect_dirs, key=os.path.getmtime)
-
-        # 获取最新的图片文件列表
-        image_files = []
-        for ext in ['*.png', '*.jpg', '*.jpeg']:
-            image_files.extend(glob.glob(os.path.join(latest_detect_dir, ext)))
-
-        if not image_files:
-            print(f"未找到图片文件: {latest_detect_dir}")
-            return
-
-        # 显示第一张图片和预测结果
-        self.image_list = image_files
-        self.current_image_index = 0
-        self.show_image_and_predictions(self.current_image_index)  # 更新界面显示
-
-        # 更新文本框显示图片信息
-        self.text_edit.clear()
-        for image_path in self.image_list:
-            image_name = os.path.basename(image_path)
-            predicted_label, label_explanation = self.predict_image(image_path)
-            self.text_edit.append(f"图片: {image_name}")
-            self.text_edit.append(f"类别: {label_explanation}")
-            self.text_edit.append("")  # 空行分隔不同图片的信息
     def select_folder(self):
         self.source_folder = QtWidgets.QFileDialog.getExistingDirectory(self, "选择文件夹")
         if self.source_folder:
@@ -273,9 +246,6 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
             print(f"未找到裁剪目录: {crops_dir}")
             return
 
-        # 目标目录
-        self.target_dir = './target_directory/'
-
         # 清空目标目录中的旧文件
         if os.path.exists(self.target_dir):
             shutil.rmtree(self.target_dir)
@@ -284,40 +254,77 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
         # 复制最新 crops 目录到目标目录
         shutil.copytree(crops_dir, self.target_dir, dirs_exist_ok=True)
 
-    def predict_images(self):
-        if not self.target_dir:
-            print("请先裁剪图片")
-            return
+        # 更新裁剪图片映射
+        self.update_image_map()
 
-        # 清空预测结果和图片列表
-        self.predictions.clear()
-        self.image_list.clear()
+    def update_image_map(self):
+        # 清空原始图片映射
+        self.original_image_map.clear()
 
-        # 遍历目标目录进行预测
+        # 遍历裁剪后的目录结构，建立裁剪后与原始图片的映射关系
         categories = ['mandatory', 'prohibitory', 'warning']
 
         for category in categories:
-            category_dir = os.path.join(self.target_dir, category)
-            if os.path.exists(category_dir):
+            category_dir = os.path.join(self.target_dir, category)  # 获取每个类别的目录路径
+            if os.path.exists(category_dir):  # 检查类别目录是否存在
                 print(f"处理类别: {category}，文件夹: {category_dir}")
-                for image_name in os.listdir(category_dir):
-                    image_path = os.path.join(category_dir, image_name)
-                    if image_path.endswith(('.png', '.jpg', '.jpeg')):
-                        predicted_label, label_explanation = self.predict_image(image_path)
-                        self.predictions.append({
-                            'image_name': image_name,
-                            'category': category,
-                            'predicted_label': predicted_label,
-                            'label_explanation': label_explanation
-                        })
-                        self.image_list.append(image_path)
+                for cropped_image_name in os.listdir(category_dir):  # 遍历类别目录中的所有文件
+                    cropped_image_path = os.path.join(category_dir, cropped_image_name)  # 获取裁剪后的图像路径
+                    if cropped_image_path.endswith(('.png', '.jpg', '.jpeg')):  # 检查文件是否是图像
+                        # 原始图片的路径
+                        original_image_name = cropped_image_name.split('_')[0] + '.jpg'  # 假设裁剪前的图片是jpg格式
+                        original_image_path = os.path.join(self.source_folder, original_image_name)  # 获取原始图像路径
+                        if os.path.exists(original_image_path):  # 检查原始图像是否存在
+                            self.original_image_map[cropped_image_path] = original_image_path  # 在映射中添加裁剪后的图像路径和原始图像路径
 
-        if not self.image_list:
+    def load_image_map(self):
+        map_file = os.path.join(self.target_dir, 'image_map.json')
+        if os.path.exists(map_file):
+            with open(map_file, 'r') as f:
+                self.original_image_map = json.load(f)
+
+    def save_image_map(self):
+        map_file = os.path.join(self.target_dir, 'image_map.json')
+        with open(map_file, 'w') as f:
+            json.dump(self.original_image_map, f)
+
+    def predict_images(self):
+        # 清空预测结果和图片列表
+        self.predictions.clear()  # 清空之前的预测结果列表
+        self.image_list.clear()  # 清空之前的图片路径列表
+
+        # 遍历目标目录进行预测
+        categories = ['mandatory', 'prohibitory', 'warning']  # 定义要遍历的类别目录
+
+        for category in categories:
+            category_dir = os.path.join(self.target_dir, category)  # 构建类别目录路径
+            if os.path.exists(category_dir):  # 检查类别目录是否存在
+                print(f"处理类别: {category}，文件夹: {category_dir}")
+                for cropped_image_name in os.listdir(category_dir):  # 遍历类别目录中的所有文件
+                    cropped_image_path = os.path.join(category_dir, cropped_image_name)  # 构建裁剪图像的路径
+                    if cropped_image_path.endswith(('.png', '.jpg', '.jpeg')):  # 检查文件是否是图像文件
+                        # 使用裁剪后的图片进行预测
+                        predicted_label, label_explanation = self.predict_image(cropped_image_path)
+
+                        # 找到对应的原始图片路径
+                        original_image_path = self.original_image_map.get(cropped_image_path, None)  # 获取原始图像路径
+                        if original_image_path:  # 如果找到对应的原始图像路径
+                            # 将预测结果添加到预测结果列表
+                            self.predictions.append({
+                                'cropped_image_name': cropped_image_name,  # 裁剪图像名称
+                                'original_image_path': original_image_path,  # 原始图像路径
+                                'predicted_label': predicted_label,  # 预测标签
+                                'label_explanation': label_explanation  # 标签解释
+                            })
+                            # 将裁剪图像路径添加到图片路径列表
+                            self.image_list.append(cropped_image_path)
+
+        if not self.image_list:  # 如果没有找到任何图片
             print("目标目录中未找到图片.")
-            return
+            return  # 结束函数执行
 
         # 显示第一张图片和预测结果
-        self.show_image_and_predictions(self.current_image_index)
+        self.show_image_and_predictions(self.current_image_index)  # 显示第一张图片及其预测结果
 
     def predict_image(self, image_path):
         # 读取图像并预处理
@@ -335,17 +342,27 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
 
     def show_image_and_predictions(self, index):
         if 0 <= index < len(self.image_list):
-            image_path = self.image_list[index]
-            pixmap = QtGui.QPixmap(image_path)
-            self.image_label.setPixmap(pixmap.scaledToWidth(600))  # 调整图片宽度显示
+            cropped_image_path = self.image_list[index]
+            original_image_path = self.predictions[index]['original_image_path']
+
+            # 显示裁剪后的图片
+            cropped_pixmap = QtGui.QPixmap(cropped_image_path)
+            self.cropped_image_label.setPixmap(cropped_pixmap.scaledToWidth(600))
+
+            # 显示原始图片
+            original_pixmap = QtGui.QPixmap(original_image_path)
+            self.original_image_label.setPixmap(original_pixmap.scaledToWidth(600))
+
+            # 显示预测结果
             prediction = self.predictions[index]
             self.text_edit.clear()
-            self.text_edit.append(f"图片: {prediction['image_name']}")
-            self.text_edit.append(f"类别: {prediction['category']}")
+            self.text_edit.append(f"裁剪后图片: {prediction['cropped_image_name']}")
+            self.text_edit.append(f"原始图片: {os.path.basename(original_image_path)}")
             self.text_edit.append(f"预测标签: {prediction['predicted_label']}")
             self.text_edit.append(f"标签解释: {prediction['label_explanation']}")
         else:
-            self.image_label.clear()
+            self.cropped_image_label.clear()
+            self.original_image_label.clear()
             self.text_edit.clear()
             self.text_edit.append("无图片可显示.")
 
@@ -362,6 +379,7 @@ class App(QtWidgets.QWidget):  # 继承自 QtWidgets.QWidget
 
 if __name__ == '__main__':
     import sys
+
     app = QtWidgets.QApplication(sys.argv)
     ex = App()
     ex.show()

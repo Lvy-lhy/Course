@@ -6,7 +6,7 @@ import glob
 # 定义要运行的命令和参数
 command = [
     'python', 'detect.py',
-    '--source', './Maskdata/val/images/',
+    '--source', './Maskdata/train/images/',
     '--weights', './runs/train/exp43/weights/best.pt',
     '--save-crop'
 ]
